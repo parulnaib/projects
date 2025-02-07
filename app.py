@@ -7,12 +7,13 @@ from sklearn.ensemble import RandomForestClassifier
 from sklearn.linear_model import LogisticRegression
 from xgboost import XGBClassifier
 from sklearn.metrics import accuracy_score, classification_report, confusion_matrix
+from sklearn.preprocessing import LabelEncoder
 
 # Set Streamlit page configuration
 st.set_page_config(page_title="Risk Analytics Platform", layout="wide")
 
 # Custom Branding
-st.sidebar.image("https://via.placeholder.com/150", caption="Your Company Logo", use_column_width=True)
+st.sidebar.image("https://via.placeholder.com/150", caption="Your Company Logo", use_container_width=True)
 st.sidebar.title("Risk Analytics Platform")
 st.sidebar.markdown("Empowering banks with AI-driven risk insights.")
 
@@ -27,6 +28,13 @@ if uploaded_file is not None:
     df = pd.read_csv(uploaded_file)
     st.write("### 🔍 Data Preview:")
     st.write(df.head())
+    
+    # Handle categorical variables using Label Encoding
+    categorical_cols = df.select_dtypes(include=['object']).columns
+    label_encoders = {}
+    for col in categorical_cols:
+        label_encoders[col] = LabelEncoder()
+        df[col] = label_encoders[col].fit_transform(df[col])
     
     # Select target variable
     target_variable = st.selectbox("🎯 Select Dependent Variable (Target)", df.columns)
