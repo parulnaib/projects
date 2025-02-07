@@ -1,4 +1,3 @@
-
 import streamlit as st
 import pandas as pd
 import plotly.graph_objects as go
@@ -27,24 +26,25 @@ st.title("📊 Risk Analytics Dashboard")
 
 # Generate sample data
 def generate_sample_data():
+    import numpy as np
     dates = pd.date_range(start=datetime.now() - timedelta(days=30), end=datetime.now(), freq='D')
     assets = ['BTC', 'ETH', 'SOL', 'ADA', 'DOT']
     data = []
-    
+
     for asset in assets:
-        base_var = pd.np.random.uniform(2000, 4000)
-        base_sharpe = pd.np.random.uniform(0.5, 1.5)
-        base_vol = pd.np.random.uniform(0.2, 0.4)
-        
+        base_var = np.random.uniform(2000, 4000)
+        base_sharpe = np.random.uniform(0.5, 1.5)
+        base_vol = np.random.uniform(0.2, 0.4)
+
         for date in dates:
             data.append({
                 'date': date,
                 'asset': asset,
-                'value_at_risk': base_var + pd.np.random.uniform(-200, 200),
-                'sharpe_ratio': base_sharpe + pd.np.random.uniform(-0.1, 0.1),
-                'volatility': base_vol + pd.np.random.uniform(-0.05, 0.05)
+                'value_at_risk': base_var + np.random.uniform(-200, 200),
+                'sharpe_ratio': base_sharpe + np.random.uniform(-0.1, 0.1),
+                'volatility': base_vol + np.random.uniform(-0.05, 0.05)
             })
-    
+
     return pd.DataFrame(data)
 
 # Load data
@@ -100,7 +100,7 @@ col1, col2 = st.columns(2)
 with col1:
     st.subheader("Value at Risk Over Time")
     fig_var = go.Figure()
-    
+
     for asset in selected_assets:
         asset_data = filtered_df[filtered_df['asset'] == asset]
         fig_var.add_trace(go.Scatter(
@@ -110,7 +110,7 @@ with col1:
             mode='lines',
             line=dict(width=2)
         ))
-    
+
     fig_var.update_layout(
         height=400,
         template="plotly_white",
@@ -124,7 +124,7 @@ with col1:
 with col2:
     st.subheader("Sharpe Ratio Comparison")
     fig_sharpe = go.Figure()
-    
+
     for asset in selected_assets:
         asset_data = filtered_df[filtered_df['asset'] == asset]
         fig_sharpe.add_trace(go.Scatter(
@@ -134,7 +134,7 @@ with col2:
             mode='lines',
             line=dict(width=2)
         ))
-    
+
     fig_sharpe.update_layout(
         height=400,
         template="plotly_white",
