@@ -1,178 +1,156 @@
 import streamlit as st
 import pandas as pd
+import numpy as np
+from sklearn.model_selection import train_test_split
+from sklearn.ensemble import RandomForestRegressor, RandomForestClassifier
+from sklearn.svm import SVC, SVR
+from sklearn.preprocessing import StandardScaler
+from xgboost import XGBRegressor, XGBClassifier
+from tensorflow.keras.models import Sequential
+from tensorflow.keras.layers import Dense, Conv1D, MaxPooling1D, Flatten
 import plotly.graph_objects as go
-from datetime import datetime, timedelta
 
-# Page config
-st.set_page_config(page_title="Risk Analytics Dashboard", layout="wide", initial_sidebar_state="expanded")
+st.set_page_config(page_title="Customer Risk Classification Dashboard", layout="wide")
+st.title("Customer Risk Classification Dashboard")
 
-# Custom CSS
-st.markdown("""
-<style>
-    .main {
-        background-color: #f5f5f5;
-    }
-    .stPlotlyChart {
-        background-color: white;
-        border-radius: 5px;
-        padding: 10px;
-        box-shadow: 0 2px 4px rgba(0,0,0,0.1);
-    }
-</style>
-""", unsafe_allow_html=True)
+# File upload
+uploaded_file = st.file_uploader("Upload Customer Data CSV", type=['csv'])
+st.write("Upload a CSV file containing customer data such as age, income, transaction history, etc.")
 
-# Title
-st.title("📊 Risk Analytics Dashboard")
+if uploaded_file is not None:
+    # Load data
+    df = pd.read_csv(uploaded_file)
+    st.write("Data Preview:", df.head())
 
-# Generate sample data
-def generate_sample_data():
-    import numpy as np
-    dates = pd.date_range(start=datetime.now() - timedelta(days=30), end=datetime.now(), freq='D')
-    assets = ['BTC', 'ETH', 'SOL', 'ADA', 'DOT']
-    data = []
+    # ML Settings
+    col1, col2 = st.columns(2)
 
-    for asset in assets:
-        base_var = np.random.uniform(2000, 4000)
-        base_sharpe = np.random.uniform(0.5, 1.5)
-        base_vol = np.random.uniform(0.2, 0.4)
+    with col1:
+        target = st.selectbox("Select Target Variable", df.columns)
 
-        for date in dates:
-            data.append({
-                'date': date,
-                'asset': asset,
-                'value_at_risk': base_var + np.random.uniform(-200, 200),
-                'sharpe_ratio': base_sharpe + np.random.uniform(-0.1, 0.1),
-                'volatility': base_vol + np.random.uniform(-0.05, 0.05)
-            })
+    with col2:
+        features = st.multiselect("Select Features", 
+                                [col for col in df.columns if col != target],
+                                default=[col for col in df.columns if col != target])
 
-    return pd.DataFrame(data)
+    # Algorithm selection
+    algorithm = st.selectbox("Select Algorithm", 
+                           ["Random Forest", "SVM", "XGBoost", "CNN"])
 
-# Load data
-df = generate_sample_data()
+    problem_type = st.selectbox("Problem Type", ["Classification", "Regression"])
 
-# Sidebar filters
-st.sidebar.header("🔍 Filters")
-st.sidebar.markdown("---")
+    if st.button("Train Model"):
+        # Prepare data
+        X = df[features]
+        y = df[target]
 
-selected_assets = st.sidebar.multiselect(
-    "Select Assets",
-    options=df['asset'].unique(),
-    default=df['asset'].unique()[:3]
-)
+        # Scale features
+        scaler = StandardScaler()
+        X_scaled = scaler.fit_transform(X)
 
-# Date range filter
-date_range = st.sidebar.date_input(
-    "Date Range",
-    value=(df['date'].min(), df['date'].max()),
-    min_value=df['date'].min(),
-    max_value=df['date'].max()
-)
+        # Split data
+        X_train, X_test, y_train, y_test = train_test_split(X_scaled, y, 
+                                                           test_size=0.2, 
+                                                           random_state=42)
 
-# Filter data
-filtered_df = df[
-    (df['asset'].isin(selected_assets)) &
-    (df['date'].dt.date >= date_range[0]) &
-    (df['date'].dt.date <= date_range[1])
-]
+        # Model training
+        if algorithm == "Random Forest":
+            if problem_type == "Classification":
+                model = RandomForestClassifier(n_estimators=100, random_state=42)
+                st.write("""
+                ### Customer Risk Categories:
+                - Low Risk (0): Reliable customers with stable profiles
+                - Medium Risk (1): Customers requiring moderate monitoring
+                - High Risk (2): Customers requiring enhanced due diligence
+                """)
+            else:
+                model = RandomForestRegressor(n_estimators=100, random_state=42)
 
-# Create metrics summary
-st.markdown("### 📈 Key Risk Metrics")
-metrics_cols = st.columns(3)
+        elif algorithm == "SVM":
+            if problem_type == "Classification":
+                model = SVC(kernel='rbf')
+            else:
+                model = SVR(kernel='rbf')
 
-with metrics_cols[0]:
-    avg_var = filtered_df['value_at_risk'].mean()
-    st.metric("Average VaR", f"${avg_var:,.2f}")
+        elif algorithm == "XGBoost":
+            if problem_type == "Classification":
+                model = XGBClassifier()
+            else:
+                model = XGBRegressor()
 
-with metrics_cols[1]:
-    avg_sharpe = filtered_df['sharpe_ratio'].mean()
-    st.metric("Average Sharpe Ratio", f"{avg_sharpe:.2f}")
+        elif algorithm == "CNN":
+            # Reshape data for CNN
+            X_train_cnn = X_train.reshape(X_train.shape[0], X_train.shape[1], 1)
+            X_test_cnn = X_test.reshape(X_test.shape[0], X_test.shape[1], 1)
 
-with metrics_cols[2]:
-    avg_vol = filtered_df['volatility'].mean()
-    st.metric("Average Volatility", f"{avg_vol:.2%}")
+            model = Sequential([
+                Conv1D(32, 2, activation='relu', input_shape=(X_train.shape[1], 1)),
+                MaxPooling1D(2),
+                Flatten(),
+                Dense(64, activation='relu'),
+                Dense(1, activation='sigmoid' if problem_type == "Classification" else 'linear')
+            ])
+            model.compile(optimizer='adam',
+                        loss='binary_crossentropy' if problem_type == "Classification" else 'mse',
+                        metrics=['accuracy'] if problem_type == "Classification" else ['mae'])
 
-st.markdown("---")
+            # Train CNN
+            history = model.fit(X_train_cnn, y_train, epochs=10, batch_size=32, validation_split=0.2)
+            score = model.evaluate(X_test_cnn, y_test)
+            st.write(f"Test Score: {score}")
+            return
 
-# Create two columns for charts
-col1, col2 = st.columns(2)
+        # Train model (for non-CNN algorithms)
+        model.fit(X_train, y_train)
+        score = model.score(X_test, y_test)
 
-# Value at Risk Chart
-with col1:
-    st.subheader("Value at Risk Over Time")
-    fig_var = go.Figure()
+        # Display results
+        st.success(f"Model Training Complete!")
+        st.write(f"Model Score: {score:.4f}")
 
-    for asset in selected_assets:
-        asset_data = filtered_df[filtered_df['asset'] == asset]
-        fig_var.add_trace(go.Scatter(
-            x=asset_data['date'],
-            y=asset_data['value_at_risk'],
-            name=asset,
-            mode='lines',
-            line=dict(width=2)
-        ))
+        # Feature importance for Random Forest and XGBoost
+        if algorithm in ["Random Forest", "XGBoost"]:
+            importances = pd.DataFrame({
+                'feature': features,
+                'importance': model.feature_importances_
+            }).sort_values('importance', ascending=False)
 
-    fig_var.update_layout(
-        height=400,
-        template="plotly_white",
-        xaxis_title="Date",
-        yaxis_title="Value at Risk ($)",
-        legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1)
-    )
-    st.plotly_chart(fig_var, use_container_width=True)
+            fig = go.Figure(go.Bar(
+                x=importances['feature'],
+                y=importances['importance']
+            ))
+            fig.update_layout(
+                title="Feature Importance",
+                xaxis_title="Features",
+                yaxis_title="Importance"
+            )
+            st.plotly_chart(fig)
 
-# Sharpe Ratio Chart
-with col2:
-    st.subheader("Sharpe Ratio Comparison")
-    fig_sharpe = go.Figure()
+            # Model Insights
+            st.subheader("Model Insights")
+            
+            # Performance insights
+            st.write("### Performance Analysis")
+            if score > 0.9:
+                st.success(f"Strong model performance with score of {score:.2f}")
+            elif score > 0.7:
+                st.info(f"Moderate model performance with score of {score:.2f}")
+            else:
+                st.warning(f"Model performance needs improvement with score of {score:.2f}")
 
-    for asset in selected_assets:
-        asset_data = filtered_df[filtered_df['asset'] == asset]
-        fig_sharpe.add_trace(go.Scatter(
-            x=asset_data['date'],
-            y=asset_data['sharpe_ratio'],
-            name=asset,
-            mode='lines',
-            line=dict(width=2)
-        ))
+            # Feature insights
+            if algorithm in ["Random Forest", "XGBoost"]:
+                st.write("### Feature Insights")
+                top_features = importances.head(3)['feature'].tolist()
+                st.write(f"Top influential features: {', '.join(top_features)}")
+                
+                # Recommendations
+                st.write("### Recommendations")
+                st.write("Based on the analysis:")
+                st.write("1. Focus on collecting more data for top features")
+                st.write("2. Consider feature engineering to improve model performance")
+                if score < 0.8:
+                    st.write("3. Try hyperparameter tuning to improve model accuracy")
 
-    fig_sharpe.update_layout(
-        height=400,
-        template="plotly_white",
-        xaxis_title="Date",
-        yaxis_title="Sharpe Ratio",
-        legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1)
-    )
-    st.plotly_chart(fig_sharpe, use_container_width=True)
-
-# Volatility Chart
-st.subheader("Volatility Analysis")
-fig_vol = go.Figure()
-
-for asset in selected_assets:
-    asset_data = filtered_df[filtered_df['asset'] == asset]
-    fig_vol.add_trace(go.Scatter(
-        x=asset_data['date'],
-        y=asset_data['volatility'],
-        name=asset,
-        mode='lines',
-        line=dict(width=2)
-    ))
-
-fig_vol.update_layout(
-    height=400,
-    template="plotly_white",
-    xaxis_title="Date",
-    yaxis_title="Volatility (%)",
-    legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1),
-    yaxis_tickformat='.2%'
-)
-st.plotly_chart(fig_vol, use_container_width=True)
-
-# Metrics Table
-st.markdown("### 📊 Latest Risk Metrics")
-latest_metrics = filtered_df.groupby('asset').last().reset_index()[['asset', 'value_at_risk', 'sharpe_ratio', 'volatility']]
-latest_metrics['volatility'] = latest_metrics['volatility'].map('{:.2%}'.format)
-latest_metrics['value_at_risk'] = latest_metrics['value_at_risk'].map('${:,.2f}'.format)
-latest_metrics['sharpe_ratio'] = latest_metrics['sharpe_ratio'].map('{:.2f}'.format)
-latest_metrics.columns = ['Asset', 'Value at Risk', 'Sharpe Ratio', 'Volatility']
-st.dataframe(latest_metrics, use_container_width=True)
+else:
+    st.info("Please upload a CSV file to begin analysis.")
